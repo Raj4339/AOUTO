@@ -1,0 +1,43 @@
+// 🔇 Console को चुप कर दो
+console.log = function () {};
+console.error = function () {};
+
+setInterval(() => {
+  try {
+    const iframe = document.getElementById("stallexam");
+    if (!iframe) return;
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    if (!iframeDoc) return;
+
+    const scripts = iframeDoc.querySelectorAll("script");
+    let matchRadioNum = null;
+
+    for (const script of scripts) {
+      const code = script.innerHTML;
+      const match = code.match(/document\.getElementById\("radio(\d+)"\)\.style\.background\s*=\s*["']#8ac007["']/i);
+      if (match) {
+        matchRadioNum = match[1];
+        break;
+      }
+    }
+
+    if (!matchRadioNum) return;
+
+    const radioId = "stallradio" + matchRadioNum;
+    const radioBtn = iframeDoc.getElementById(radioId);
+    if (!radioBtn) return;
+
+    radioBtn.checked = true;
+
+    const confirmBtn = iframeDoc.getElementById("confirmbut");
+    if (!confirmBtn) return;
+
+    confirmBtn.disabled = false;
+    confirmBtn.removeAttribute("disabled");
+    confirmBtn.click();
+
+  } catch (err) {
+    // errors भी चुप करा दिए गए हैं
+  }
+}, 1000); // हर 1 सेकंड में auto-run
