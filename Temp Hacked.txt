@@ -1,0 +1,146 @@
+// ==UserScript==
+// @name         Sarathi Anugnya Auto-Reload & Pause Script
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Auto-reload on 403/404 and pause when LL inputs are ready
+// @author       You
+// @match        https://sarathi.parivahan.gov.in/sarathiservice/authenticationaction.do?authtype=Anugnya
+// @match        https://sarathi.parivahan.gov.in/sarathiservice/*
+// @match        https://sarathi.parivahan.gov.in/sarathiservice/403.jsp
+// @grant        none
+// @run-at       document-start
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Global variables to prevent infinite loops
+    let hasReloaded = false;
+    let isPaused = false;
+    let observer = null;
+
+    console.log('🚀 Sarathi Script Started');
+
+    // Function to check if current page is 403 or 404
+    function isErrorPage() {
+        const url = window.location.href;
+        return url.includes('403.jsp') || url.includes('404.jsp');
+    }
+
+    // Function to reload to Anugnya page
+    function reloadToAnugnya() {
+        if (!hasReloaded) {
+            hasReloaded = true;
+            console.log('🔄 Redirecting to Anugnya page...');
+            window.location.href = 'https://sarathi.parivahan.gov.in/sarathiservice/authenticationaction.do?authtype=Anugnya';
+        }
+    }
+
+    // Function to pause page and show alert
+    function pausePage() {
+        if (!isPaused) {
+            isPaused = true;
+            window.stop();
+
+            // Disconnect observer to prevent further checks
+            if (observer) {
+                observer.disconnect();
+                observer = null;
+            }
+
+            console.log('⏸ Page paused - LL inputs detected');
+            alert('✅ Page paused. Captcha & LL input ready.');
+        }
+    }
+
+    // Function to check for required input fields
+    function checkForInputs() {
+        const applNumberInput = document.querySelector('input[name="applNumber"]');
+        const captchaInput = document.querySelector('input[name="captcha"]');
+
+        if (applNumberInput && captchaInput) {
+            console.log('✅ Both inputs found:', {
+                applNumber: applNumberInput,
+                captcha: captchaInput
+            });
+            pausePage();
+            return true;
+        }
+        return false;
+    }
+
+    // Main execution logic
+    function init() {
+        // Check if we're on an error page
+        if (isErrorPage()) {
+            console.log('❌ Error page detected:', window.location.href);
+            window.stop();
+            document.documentElement.innerHTML = '';
+            setTimeout(reloadToAnugnya, 100);
+            return;
+        }
+
+        // If we're on the Anugnya page, start monitoring for inputs
+        if (window.location.href.includes('authtype=Anugnya')) {
+            console.log('📍 On Anugnya page, monitoring for inputs...');
+
+            // Check immediately if inputs already exist
+            if (document.readyState !== 'loading') {
+                if (checkForInputs()) return;
+            }
+
+            // Set up MutationObserver to watch for DOM changes
+            observer = new MutationObserver(function(mutations) {
+                if (isPaused) return;
+
+                for (let mutation of mutations) {
+                    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                        if (checkForInputs()) {
+                            return;
+                        }
+                    }
+                }
+            });
+
+            // Start observing
+            observer.observe(document, {
+                childList: true,
+                subtree: true
+            });
+
+            // Backup check after DOM is fully loaded
+            document.addEventListener('DOMContentLoaded', function() {
+                if (!isPaused) {
+                    checkForInputs();
+                }
+            });
+
+            // Final backup check after window load
+            window.addEventListener('load', function() {
+                if (!isPaused) {
+                    checkForInputs();
+                }
+            });
+        }
+    }
+
+    // Handle page navigation changes (in case of AJAX redirects)
+    let currentUrl = window.location.href;
+    setInterval(function() {
+        if (window.location.href !== currentUrl) {
+            currentUrl = window.location.href;
+            hasReloaded = false;
+            isPaused = false;
+            if (observer) {
+                observer.disconnect();
+                observer = null;
+            }
+            console.log('🔄 URL changed, reinitializing...');
+            setTimeout(init, 100);
+        }
+    }, 500);
+
+    // Start the script
+    init();
+
+})();
